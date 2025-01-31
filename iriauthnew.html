@@ -1,0 +1,253 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <title>Вход</title>
+    <meta name="description" content="Вход в iriauth">
+    <meta name="x5-orientation" content="portrait">
+    <meta name="screen-orientation" content="portrait">
+    <meta name="nightmode" content="disable">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Вход">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Вход">
+    <link rel="stylesheet" href="../static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        const loginData = { isLoggedIn: {{ log }} };
+
+        function getCookie(name) {
+            const matches = document.cookie.match(new RegExp(
+                "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+            ));
+            return matches ? decodeURIComponent(matches[1]) : undefined;
+        }
+
+        function initializePage() {
+            let hasError = false;
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const uri = urlParams.get('uri').split('://')[1].split('/')[0];
+                const continueLogin = () => {
+                    window.location.replace(`https://isamiri.pythonanywhere.com/api/generate_token/${encodeURI(getCookie('username'))}/${encodeURI(getCookie('password'))}/730?uri=${encodeURI(urlParams.get('uri'))}&by=${encodeURI(uri)}`);
+                };
+                document.getElementById('agreement').innerHTML = `Нажимая на кнопку продолжить, вы соглашаетесь с тем что доверяете сайту ${uri} данные от своего аккаунта iriauth<br><a style="text-decoration: underline;" href="https://isamiri.pythonanywhere.com/iriauth">Подробнее</a>`;
+            } catch {
+                document.body.className = 'bg-lightest-dark-like center-children h-full';
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('errorScreen').style.display = 'flex';
+                hasError = true;
+            }
+            if (!hasError) {
+                if (loginData.isLoggedIn) {
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('loggedIn').style.display = 'flex';
+                    fetch(`${location.protocol}//isamiri.pythonanywhere.com/api/irinet/user?username=${getCookie('username')}`)
+                        .then(response => response.json())
+                        .then(user => {
+                            document.getElementById('loading').style.display = 'none';
+                            document.getElementById('registration').style.display = 'none';
+                            document.getElementById('loggedIn').style.display = 'flex';
+                            document.getElementById('continueAs').innerText = `Продолжить как ${user.name}`;
+                        });
+                } else {
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('registration').style.display = 'flex';
+                }
+            }
+        }
+
+        async function changeUserName() {
+            document.getElementById('loading').style.display = 'flex';
+            document.getElementById('changeName').style.display = 'none';
+            const requestPayload = {
+                check: { name: true, nickname: false, avatar: false, description: false, background: false, vk: false, discord: false },
+                data: { name: document.getElementById('newNameInput').value, nickname: null, avatar: null, description: null, background: null, vk: null, discord: null },
+                auth: { login: getCookie("username"), password: getCookie("password") },
+            };
+
+            const response = await fetch("https://isamiri.pythonanywhere.com/api/irinet/user", {
+                method: "PUT",
+                body: JSON.stringify(requestPayload),
+            });
+
+            if (response.status === 500) {
+                showAlert("Произошла внутренняя ошибка сервера:(", 'loading', 'changeName');
+            } else {
+                const json = await response.json();
+                if (response.status !== 200) {
+                    showAlert(json["msg"], 'loading', 'changeName');
+                } else {
+                    document.getElementById('loggedIn').style.display = 'flex';
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('continueAs').innerText = `Продолжить как ${document.getElementById('newNameInput').value}`;
+                }
+            }
+        }
+
+        async function loginUser() {
+            try {
+                document.getElementById('loading').style.display = 'flex';
+                document.getElementById('registration').style.display = 'none';
+                const response = await fetch(`${location.protocol}//isamiri.pythonanywhere.com/clapi/irinet/is_auth_valid`, {
+                    method: 'POST',
+                    body: JSON.stringify({ "username": document.getElementById('loginInput').value, "password": document.getElementById('passwordInput').value })
+                });
+
+                if (response.status === 500) {
+                    showAlert('Произошла внутренняя ошибка сервера', 'loading', 'registration');
+                } else {
+                    const json = await response.json();
+                    if (json['status_code'] !== "200") {
+                        if (json['msg'] === 'Noname') {
+                            await registerUser();
+                        } else {
+                            showAlert(json.msg, 'loading', 'registration');
+                        }
+                    } else {
+                        document.cookie = `username=${document.getElementById('loginInput').value}; path=/; max-age=2628002;`;
+                        document.cookie = `password=${json['hash']}; path=/; max-age=2628002;`;
+                        document.cookie = "cookiewarning=true; path=/; max-age=2628002;";
+                        fetch(`${location.protocol}//isamiri.pythonanywhere.com/api/irinet/user?username=${document.getElementById('loginInput').value}`)
+                            .then(response => response.json())
+                            .then(user => {
+                                document.getElementById('loading').style.display = 'none';
+                                document.getElementById('registration').style.display = 'none';
+                                document.getElementById('loggedIn').style.display = 'flex';
+                                document.getElementById('continueAs').innerText = `Продолжить как ${user.name}`;
+                            });
+                    }
+                }
+            } catch (err) {
+                showAlert('Фатальная ошибка!', 'loading', 'changeName');
+                document.getElementById('closeError').style.display = "none";
+            }
+        }
+
+        async function registerUser() {
+            try {
+                document.getElementById('loading').style.display = 'flex';
+                document.getElementById('registration').style.display = 'none';
+                if (!document.getElementById('loginInput').value) {
+                    showAlert('Введите логин!', 'loading', 'registration');
+                } else if (!document.getElementById('passwordInput').value) {
+                    showAlert('Введите пароль!', 'loading', 'registration');
+                } else if (!document.getElementById('nameInput').value) {
+                    showAlert('Введите имя!', 'loading', 'registration');
+                } else if (!document.getElementById('secretWordsInput').value) {
+                    showAlert('Введите секретные слова!', 'loading', 'registration');
+                } else {
+                    const name = document.getElementById('nameInput').value;
+                    const response = await fetch(`${location.protocol}//isamiri.pythonanywhere.com/api/irinet/user`, {
+                        method: 'POST',
+                        body: JSON.stringify({ "username": document.getElementById('loginInput').value, "password": document.getElementById('passwordInput').value, 'name': name, 'secretWords': document.getElementById('secretWordsInput').value })
+                    });
+
+                    if (response.status === 500) {
+                        showAlert('Произошла внутренняя ошибка сервера.', 'loading', 'registration');
+                    } else if (response.status === 200) {
+                        await loginUser();
+                    } else {
+                        const json = await response.json();
+                        if (response.status === 405) {
+                            showAlert(json['msg'], 'loading', 'registration');
+                        } else if (json['status_code'] !== "200") {
+                            showAlert(json['msg'], 'loading', 'registration');
+                        }
+                    }
+                }
+            } catch (err) {
+                showAlert('Фатальная ошибка!', 'loading', 'changeName');
+                document.getElementById('closeError').style.display = "none";
+            }
+        }
+
+        function showAlert(message, elementToHide, elementToShow) {
+            document.body.className = 'bg-lightest-dark-like center-children h-full';
+            document.getElementById('errorText').innerText = message;
+            document.getElementById('closeError').onclick = () => {
+                document.getElementById('errorScreen').style.display = 'none';
+                document.getElementById(elementToShow).style.display = 'flex';
+                document.body.className = 'bg-like center-children h-full';
+            };
+            document.getElementById(elementToHide).style.display = 'none';
+            document.getElementById('errorScreen').style.display = 'flex';
+        }
+
+        let registrationDisplay = 'none';
+
+        function toggleRegistration() {
+            registrationDisplay = (registrationDisplay === 'block') ? 'none' : 'block';
+            document.querySelectorAll('.registration').forEach(element => {
+                element.style.display = registrationDisplay;
+            });
+            document.getElementById('loginButton').innerText = (registrationDisplay === 'block') ? 'Зарегистрироваться' : 'Войти';
+            document.getElementById('registerButton').innerText = (registrationDisplay === 'block') ? 'Войти' : 'Зарегистрироваться';
+        }
+
+        function otpNotImplemented() {
+            showAlert("Функция не реализована ", 'otp', 'otp');
+        }
+
+        window.onload = initializePage;
+    </script>
+</head>
+<body style="background-color: #{{color}};background-image: url({{bg}});background-size: cover;background-position: center;" class="center-children h-full">
+    <div id="loggedIn" class="card-alt rbig hover-without-bold-text bg-white m-0 center-children" style="display: none;">
+        <img class="mt-3" alt="iriauth" src="{{logo}}" style="width: 240px;">
+        <a id="continueAs" onclick="continueLogin()" class="button rbig mb-3 text-light mt-9" style="background:black;">Продолжить</a>
+        <a onclick="document.getElementById('loggedIn').style.display = 'none';document.getElementById('registration').style.display = 'flex';document.body.style.background = 'auto'" class="button rbig mb-3 text-light" style="background:black;">Войти в другой аккаунт</a>
+        <a onclick="document.getElementById('loggedIn').style.display = 'none';document.getElementById('changeName').style.display = 'flex';" class="button rbig mb-3 text-light" style="background:black;">Сменить имя</a>
+        <a onclick="document.getElementById('loggedIn').style.display = 'none';document.getElementById('otp').style.display = 'flex';" class="button rbig mb-3 text-light" style="background:black;display:none;">Управление OTP</a>
+        <p id="agreement" style="max-width: 267.8px;text-align: center;color: #a6a6a6;font-size: 8pt;">Нажимая на кнопку продолжить, вы соглашаетесь с тем что доверяете сайту с которого вы перешли данные от своего аккаунта</p>
+    </div>
+    <div id="loading" class="card-alt rbig hover-without-bold-text bg-white m-0 center-children" style="display:flex;">
+        <img alt="Loading" style="animation: spin 1s linear infinite;" src="../static/spinner.svg">
+        <noscript class="card-alt rbig hover-without-bold-text bg-white m-0 center-children">
+            <h3 id="errorText" style="max-width: 400px;text-align: center;">В вашем брузере отключен Javascript!</h3>
+            <a id="closeError" class="button rbig mb-3 text-light" style="background: black none repeat scroll 0% 0%; display: none;">ОК</a>
+        </noscript>
+    </div>
+    <div id="registration" class="card-alt rbig hover-without-bold-text bg-white m-0 center-children" style="display: none;">
+        <img class="mt-3" alt="iriauth" src="{{logo}}" style="width: 240px;">
+        <div>
+            <div class="group rmed">
+                <input id="loginInput" placeholder="Логин *" class="group-item input mt-9 w-full bg-grey"><br>
+                <input id="passwordInput" type="password" placeholder="Пароль *" class="group-item input w-full bg-grey"><br>
+                <input id="nameInput" placeholder="Имя" class="group-item input w-full bg-grey registration">
+                <input id="secretWordsInput" placeholder="Секретные слова" class="group-item input w-full bg-grey registration">
+                <a onclick="loginUser()"><div id="loginButton" class="group-item button rbig text-light bg-black blackonhover mb-3">Войти</div></a>
+            </div>
+            <div class="group rmed w-full">
+                <a><div id="registerButton" onclick="toggleRegistration()" class="group-item button rbig text-light bg-grey blackonhover text-xs">Зарегистрироваться</div></a>
+                <a href="https://f.isamiri.ru/irinet-recover"><div class="group-item button rbig text-light bg-grey blackonhover mb-1 text-xs">Восстановить пароль</div></a>
+            </div>
+        </div>
+    </div>
+    <div id="errorScreen" class="card-alt rbig hover-without-bold-text bg-white m-0 center-children" style="display: none;">
+        <img src="https://media.discordapp.net/attachments/706221390289961101/874300261642940466/IMG_0140.PNG" class="w-60" alt="Упс" style="margin-top: -20px;margin-bottom: -20px;">
+        <h3 class="m-0 text-center">Произошла ошибка</h3>
+        <p class="text-center">Возможно в адресе отсутсвует URL, или он набран в неправильном формате.<br>Обратитесь к владельцу сайта с которого вы перешли.</p>
+    </div>
+    <div id="changeName" class="card-alt rbig hover-without-bold-text bg-white m-0 center-children" style="display: none;">
+        <img class="mt-3" alt="iriauth" src="{{logo}}" style="width: 240px;">
+        <div class="group rmed">
+            <input id="newNameInput" placeholder="Введите новое имя" class="group-item input mt-9 bg-grey">
+            <a onclick="changeUserName()"><div class="group-item button text-light bg-black blackonhover">Изменить имя</div></a>
+            <a onclick="document.getElementById('loggedIn').style.display = 'flex';document.getElementById('changeName').style.display = 'none';"><div class="group-item button mb-3 text-light bg-black blackonhover">Отмена</div></a>
+        </div>
+    </div>
+    <div id="otp" class="card-alt rbig hover-without-bold-text bg-white m-0 center-children" style="display: none;">
+        <img class="mt-3" alt="iriauth" src="{{logo}}" style="width: 240px;">
+        <a onclick="otpNotImplemented()" class="button rbig mb-3 mt-9 text-light" style="background:black;">Включить OTP</a>
+        <a onclick="document.getElementById('otp').style.display = 'none';document.getElementById('loggedIn').style.display = 'flex';" class="button rbig mb-3 text-light" style="background:black;">Назад</a>
+    </div>
+    <div id="errorScreen" class="card-alt rbig hover-without-bold-text bg-white m-0 center-children" style="display: none;">
+        <img class="mt-3 h-14" alt="Alert!" src="https://cdn.discordapp.com/attachments/706221390289961101/877909978638352404/Group_14.svg">
+        <h3 id="ert" style="max-width: 400px;text-align: center;">errortext</h3>
+        <a id="closerror" class="button rbig mb-3 text-light" style="background:black;">ОК</a>
+    </div>
+</body>
+</html>
